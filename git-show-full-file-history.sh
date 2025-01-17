@@ -3,9 +3,9 @@
 # Pattern to match files
 pattern="priv/repo/migrations/2025.*\.exs"
 
-# Find files matching the pattern that have been deleted
-echo "Running: git ls-files --deleted | grep '$pattern'"
-deleted_files=$(git ls-files --deleted | grep "$pattern")
+# Find deleted files matching the pattern using git log
+echo "Running: git log --diff-filter=D --name-only | grep '$pattern' | sort -u"
+deleted_files=$(git log --diff-filter=D --name-only | grep "$pattern" | sort -u)
 
 # Check if any deleted files were found
 if [[ -z "$deleted_files" ]]; then
@@ -20,21 +20,28 @@ while IFS= read -r file; do
   echo "=================================================="
 
   # Get commit history for the file
-  echo "Running: git log --pretty=format:\"%H\" --follow -- \"$file\""
-  commits=$(git log --pretty=format:"%H" --follow -- "$file")
+  echo "Running: git log --pretty=format:\"%H %ad\" --date=iso-strict --follow -- \"$file\""
+  commits=$(git log --pretty=format:"%H %ad" --date=iso-strict --follow -- "$file")
 
   # Iterate through the commits
-  while IFS= read -r commit; do
+  while IFS=$' \t\n' read -r commit commit_date; do
     echo "--------------------------------------------------"
-    echo "Content at revision: $commit"
+    echo "Commit: $commit"
+    echo "Commit Date: $commit_date"
     echo "--------------------------------------------------"
 
     # Show the file content at the current commit
     echo "Running: git show \"$commit:$file\""
-    git show "$commit:$file"
+    content=$(git show "$commit:$file" 2>&1)
+
+    # Check for deletion
+    if [[ $content == *"fatal: path"* ]]; then
+        echo "File was deleted in this commit."
+    else
+        echo "$content"
+    fi
+
   done <<< "$commits"
 
   echo ""
 done <<< "$deleted_files"
-
-
